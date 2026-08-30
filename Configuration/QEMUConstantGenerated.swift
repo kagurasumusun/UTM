@@ -5021,6 +5021,7 @@ enum QEMUTarget_alpha: String, CaseIterable, QEMUTarget {
 }
 
 enum QEMUTarget_arm: String, CaseIterable, QEMUTarget {
+    case brain
     case integratorcp
     case kzm
     case mps2_an385 = "mps2-an385"
@@ -5134,6 +5135,7 @@ enum QEMUTarget_arm: String, CaseIterable, QEMUTarget {
 
     var prettyValue: String {
         switch self {
+        case .brain: return "SHARP Brain (brain)"
         case .integratorcp: return "ARM Integrator/CP (ARM926EJ-S) (integratorcp)"
         case .kzm: return "ARM KZM Emulation Baseboard (ARM1136) (kzm)"
         case .mps2_an385: return "ARM MPS2 with AN385 FPGA image for Cortex-M3 (mps2-an385)"

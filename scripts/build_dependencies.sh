@@ -210,7 +210,7 @@ download_all () {
     download $SPICE_CLIENT_SRC
     download $ZSTD_SRC
     download $SLIRP_SRC
-    download $QEMU_SRC
+    clone $QEMU_REPO $QEMU_COMMIT
     if [ -z "$SKIP_USB_BUILD" ]; then
         download $USB_SRC
         download $USBREDIR_SRC
@@ -1079,8 +1079,8 @@ PATCHES_DIR="$BASEDIR/../patches"
 source "$PATCHES_DIR/sources"
 
 if [ -z "$QEMU_DIR" ]; then
-    FILE="$(basename $QEMU_SRC)"
-    QEMU_DIR="$BUILD_DIR/${FILE%.tar.*}"
+    NAME="$(basename $QEMU_REPO)"
+    QEMU_DIR="$BUILD_DIR/$NAME"
 elif [ ! -d "$QEMU_DIR" ]; then
     echo "${RED}Cannot find: ${QEMU_DIR}...${NC}"
     exit 1
