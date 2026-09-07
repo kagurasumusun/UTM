@@ -141,7 +141,9 @@ download () {
     fi
     if [ -d "$DATA" ]; then
         echo "${GREEN}Patching data ${NAME}...${NC}"
-        cp -r "$DATA/" "$DIR"
+        # "$DATA/." (not "$DATA/") so the contents are merged into $DIR
+        # instead of the directory being copied inside it.
+        cp -r "$DATA/." "$DIR"
     fi
 }
 
