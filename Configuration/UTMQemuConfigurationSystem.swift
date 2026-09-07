@@ -16,6 +16,99 @@
 
 import Foundation
 
+/// Settings specific to the SHARP Brain machine (`-machine brain` in qemu-brain).
+///
+/// Every field maps one-to-one to a machine property registered by
+/// `brain_instance_init()` in qemu-brain's `hw/arm/mxs.c`, and the defaults
+/// here are the same defaults QEMU uses, so an untouched configuration
+/// produces no extra `-machine` properties at all.
+struct UTMQemuConfigurationBrain: Codable {
+    /// `'eboot'` jumps straight into EBOOT, `'full'` also runs the XLDR DDR init.
+    var bootMode: String = "eboot"
+
+    /// Faithful hardware mode. Off means every QEMU-only guest aid is re-enabled.
+    var isStrictHw: Bool = true
+
+    /// Extra logging from the ROM/XLDR stage.
+    var isRomVerbose: Bool = true
+
+    /// Attach a NAND device to the GPMI controller (the real socket is empty).
+    var hasGpmiNand: Bool = false
+
+    /// Raw image backing the GPMI NAND media. Needs `hasGpmiNand`.
+    var gpmiNandFileName: String?
+
+    /// QEMU-only aid: remap the FMD Region 4 window onto the real FAT32 partition.
+    var isAidRegion4Remap: Bool = false
+
+    /// QEMU-only aid: after eMMC boot, scan the SD card for a launcher and run it.
+    var isAidSdLauncher: Bool = false
+
+    /// QEMU-only aid: ignore unmapped/aborted memory transactions.
+    var isAidIgnoreBusErr: Bool = false
+
+    /// Fault-injection experiment: first sector of the zone.
+    var expFaultStart: Int = 0
+
+    /// Fault-injection experiment: zone length in sectors.
+    var expFaultLen: Int = 0
+
+    /// Fault-injection experiment: 0=off 1=read-error 2=read-delay 3=trace-only.
+    var expFaultMode: Int = 0
+
+    /// Fault-injection experiment: virtual-time delay per zone read in mode 2.
+    var expFaultDelayUs: Int = 500000
+
+    /// Guest framebuffer width. The panel is a 480x854 portrait module.
+    var lcdWidth: Int = 480
+
+    /// Guest framebuffer height.
+    var lcdHeight: Int = 854
+
+    /// Degrees the panel is physically mounted (90 gives the landscape picture).
+    var lcdRotate: Int = 90
+
+    enum CodingKeys: String, CodingKey {
+        case bootMode = "BootMode"
+        case isStrictHw = "StrictHw"
+        case isRomVerbose = "RomVerbose"
+        case hasGpmiNand = "GpmiNand"
+        case gpmiNandFileName = "GpmiNandFile"
+        case isAidRegion4Remap = "AidRegion4Remap"
+        case isAidSdLauncher = "AidSdLauncher"
+        case isAidIgnoreBusErr = "AidIgnoreBusErr"
+        case expFaultStart = "ExpFaultStart"
+        case expFaultLen = "ExpFaultLen"
+        case expFaultMode = "ExpFaultMode"
+        case expFaultDelayUs = "ExpFaultDelayUs"
+        case lcdWidth = "LcdWidth"
+        case lcdHeight = "LcdHeight"
+        case lcdRotate = "LcdRotate"
+    }
+
+    init() {
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        bootMode = try values.decodeIfPresent(String.self, forKey: .bootMode) ?? "eboot"
+        isStrictHw = try values.decodeIfPresent(Bool.self, forKey: .isStrictHw) ?? true
+        isRomVerbose = try values.decodeIfPresent(Bool.self, forKey: .isRomVerbose) ?? true
+        hasGpmiNand = try values.decodeIfPresent(Bool.self, forKey: .hasGpmiNand) ?? false
+        gpmiNandFileName = try values.decodeIfPresent(String.self, forKey: .gpmiNandFileName)
+        isAidRegion4Remap = try values.decodeIfPresent(Bool.self, forKey: .isAidRegion4Remap) ?? false
+        isAidSdLauncher = try values.decodeIfPresent(Bool.self, forKey: .isAidSdLauncher) ?? false
+        isAidIgnoreBusErr = try values.decodeIfPresent(Bool.self, forKey: .isAidIgnoreBusErr) ?? false
+        expFaultStart = try values.decodeIfPresent(Int.self, forKey: .expFaultStart) ?? 0
+        expFaultLen = try values.decodeIfPresent(Int.self, forKey: .expFaultLen) ?? 0
+        expFaultMode = try values.decodeIfPresent(Int.self, forKey: .expFaultMode) ?? 0
+        expFaultDelayUs = try values.decodeIfPresent(Int.self, forKey: .expFaultDelayUs) ?? 500000
+        lcdWidth = try values.decodeIfPresent(Int.self, forKey: .lcdWidth) ?? 480
+        lcdHeight = try values.decodeIfPresent(Int.self, forKey: .lcdHeight) ?? 854
+        lcdRotate = try values.decodeIfPresent(Int.self, forKey: .lcdRotate) ?? 90
+    }
+}
+
 /// Basic hardware settings.
 struct UTMQemuConfigurationSystem: Codable {
     /// The QEMU architecture to emulate.
@@ -44,6 +137,9 @@ struct UTMQemuConfigurationSystem: Codable {
     
     /// The JIT cache (code cache) in MiB.
     var jitCacheSize: Int = 0
+
+    /// Settings for the SHARP Brain machine. Ignored for every other target.
+    var brain: UTMQemuConfigurationBrain = UTMQemuConfigurationBrain()
     
     enum CodingKeys: String, CodingKey {
         case architecture = "Architecture"
@@ -55,6 +151,7 @@ struct UTMQemuConfigurationSystem: Codable {
         case isForceMulticore = "ForceMulticore"
         case memorySize = "MemorySize"
         case jitCacheSize = "JITCacheSize"
+        case brain = "Brain"
     }
     
     init() {
@@ -76,6 +173,7 @@ struct UTMQemuConfigurationSystem: Codable {
         isForceMulticore = try values.decode(Bool.self, forKey: .isForceMulticore)
         memorySize = try values.decode(Int.self, forKey: .memorySize)
         jitCacheSize = try values.decode(Int.self, forKey: .jitCacheSize)
+        brain = try values.decodeIfPresent(UTMQemuConfigurationBrain.self, forKey: .brain) ?? UTMQemuConfigurationBrain()
     }
     
     func encode(to encoder: Encoder) throws {
@@ -89,6 +187,7 @@ struct UTMQemuConfigurationSystem: Codable {
         try container.encode(isForceMulticore, forKey: .isForceMulticore)
         try container.encode(memorySize, forKey: .memorySize)
         try container.encode(jitCacheSize, forKey: .jitCacheSize)
+        try container.encode(brain, forKey: .brain)
     }
 }
 

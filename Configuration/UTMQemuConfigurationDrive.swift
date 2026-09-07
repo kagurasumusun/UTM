@@ -124,6 +124,10 @@ struct UTMQemuConfigurationDrive: UTMConfigurationDrive {
 extension UTMQemuConfigurationDrive {
     static func defaultInterface(forArchitecture architecture: QEMUArchitecture, target: any QEMUTarget, imageType: QEMUDriveImageType) -> QEMUDriveInterface {
         let rawTarget = target.rawValue
+        if rawTarget == QEMUTarget_arm.brain.rawValue {
+            // The Brain boots from SD media only: eMMC on SSP0, microSD on SSP1.
+            return .sd
+        }
         if rawTarget.hasPrefix("virt-") || rawTarget == "virt" || rawTarget.hasPrefix("pseries") {
             if imageType == .cd {
                 return .usb

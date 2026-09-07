@@ -259,7 +259,16 @@ import Virtualization // for getting network interfaces
     }
 
     private func shouldSkipDisplay(_ display: UTMQemuConfigurationDisplay) -> Bool {
-        return display.hardware.rawValue == QEMUDisplayDevice_m68k.nubus_macfb.rawValue
+        if display.hardware.rawValue == QEMUDisplayDevice_m68k.nubus_macfb.rawValue {
+            return true
+        }
+        // The Brain's LCDIF is part of the machine (hw/display/mxs_lcdif.c
+        // calls graphic_console_init() itself), so there is no display device
+        // to add -- the entry only tells UTM to give the console a window.
+        if isBrain {
+            return true
+        }
+        return false
     }
 
     @QEMUArgumentBuilder private var displayArguments: [QEMUArgument] {
@@ -372,6 +381,13 @@ import Virtualization // for getting network interfaces
 
     private var isClassicMacNewWorld: Bool {
         [.ppc, .ppc64].contains(system.architecture) && system.target.rawValue == QEMUTarget_ppc.mac99.rawValue
+    }
+
+    /// qemu-brain's SHARP Brain machine. The board is fixed hardware (one
+    /// ARM926EJ-S, 128 MiB, no PCI/USB), so most UTM device sections do not
+    /// apply; only its machine properties and SD drives are configurable.
+    private var isBrain: Bool {
+        system.architecture == .arm && system.target.rawValue == QEMUTarget_arm.brain.rawValue
     }
 
     @QEMUArgumentBuilder private var serialArguments: [QEMUArgument] {
@@ -592,6 +608,54 @@ import Virtualization // for getting network interfaces
         }
         if isClassicMacNewWorld {
             properties = properties.appendingDefaultPropertyName("via", value: "pmu")
+        }
+        if isBrain {
+            properties = brainMachineProperties(properties)
+        }
+        return properties
+    }
+
+    /// Maps `system.brain` onto qemu-brain's `-machine brain,<props>`.
+    ///
+    /// Values equal to the QEMU defaults are omitted so the command line stays
+    /// readable and an unedited VM is bit-for-bit the plain QEMU default.
+    private func brainMachineProperties(_ properties: String) -> String {
+        var properties = properties
+        let brain = system.brain
+        properties = properties.appendingDefaultPropertyName("boot-mode", value: brain.bootMode)
+        properties = properties.appendingDefaultPropertyName("rom-verbose", value: brain.isRomVerbose ? "on" : "off")
+        properties = properties.appendingDefaultPropertyName("strict-hw", value: brain.isStrictHw ? "on" : "off")
+        properties = properties.appendingDefaultPropertyName("gpmi-nand", value: brain.hasGpmiNand ? "on" : "off")
+        if brain.hasGpmiNand, let file = brain.gpmiNandFileName, !file.isEmpty {
+            properties = properties.appendingDefaultPropertyName("gpmi-nand-file", value: file)
+        }
+        // the guest aids are off in strict-hardware mode; only pass what differs
+        if !brain.isStrictHw {
+            properties = properties.appendingDefaultPropertyName("aid-region4-remap", value: brain.isAidRegion4Remap ? "on" : "off")
+            properties = properties.appendingDefaultPropertyName("aid-sd-launcher", value: brain.isAidSdLauncher ? "on" : "off")
+            properties = properties.appendingDefaultPropertyName("aid-ignore-bus-err", value: brain.isAidIgnoreBusErr ? "on" : "off")
+        } else if brain.isAidRegion4Remap || brain.isAidSdLauncher || brain.isAidIgnoreBusErr {
+            // enabling an aid individually implies leaving strict mode
+            properties = properties.appendingDefaultPropertyName("aid-region4-remap", value: brain.isAidRegion4Remap ? "on" : "off")
+            properties = properties.appendingDefaultPropertyName("aid-sd-launcher", value: brain.isAidSdLauncher ? "on" : "off")
+            properties = properties.appendingDefaultPropertyName("aid-ignore-bus-err", value: brain.isAidIgnoreBusErr ? "on" : "off")
+        }
+        if brain.expFaultMode != 0 && brain.expFaultLen != 0 {
+            properties = properties.appendingDefaultPropertyName("exp-fault-start", value: "\(brain.expFaultStart)")
+            properties = properties.appendingDefaultPropertyName("exp-fault-len", value: "\(brain.expFaultLen)")
+            properties = properties.appendingDefaultPropertyName("exp-fault-mode", value: "\(brain.expFaultMode)")
+            if brain.expFaultMode == 2 {
+                properties = properties.appendingDefaultPropertyName("exp-fault-delay-us", value: "\(brain.expFaultDelayUs)")
+            }
+        }
+        if brain.lcdWidth != 480 {
+            properties = properties.appendingDefaultPropertyName("lcd-width", value: "\(brain.lcdWidth)")
+        }
+        if brain.lcdHeight != 854 {
+            properties = properties.appendingDefaultPropertyName("lcd-height", value: "\(brain.lcdHeight)")
+        }
+        if brain.lcdRotate != 90 {
+            properties = properties.appendingDefaultPropertyName("lcd-rotate", value: "\(brain.lcdRotate)")
         }
         return properties
     }
@@ -916,6 +980,15 @@ import Virtualization // for getting network interfaces
         } else {
             realInterface = drive.interface
         }
+        // The Brain has two SD controllers addressed by index: SSP0 (the
+        // soldered eMMC) is index 0, SSP1 (the microSD slot) is index 1.
+        // QEMU's auto-assigned index would do the same thing, but spelling it
+        // out keeps the mapping obvious and stable across reordering.
+        var sdIndex: Int?
+        if isBrain && drive.interface == .sd {
+            sdIndex = busindex
+            busindex += 1
+        }
         busInterfaceMap["boot"] = bootindex
         busInterfaceMap[drive.interface.rawValue] = busindex
         f("-drive")
@@ -926,6 +999,9 @@ import Virtualization // for getting network interfaces
             "if=scsi"
         case .sd:
             "if=sd"
+            if let sdIndex = sdIndex {
+                "index=\(sdIndex)"
+            }
         case .mtd:
             "if=mtd"
         case .floppy:

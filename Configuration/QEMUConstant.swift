@@ -474,6 +474,9 @@ extension QEMUTarget {
     var hasUsbSupport: Bool {
         switch self.rawValue {
         case "isapc": return false
+        // the Brain has no USB controller at all; its input is the built-in
+        // brain_kbd / mxs_lradc, so UTM must not add any -device usb-*.
+        case QEMUTarget_arm.brain.rawValue: return false
         default: return true
         }
     }
@@ -481,6 +484,8 @@ extension QEMUTarget {
     var hasAgentSupport: Bool {
         switch self.rawValue {
         case "isapc": return false
+        // no virtio bus, so no SPICE agent channel either
+        case QEMUTarget_arm.brain.rawValue: return false
         default: return true
         }
     }
@@ -488,6 +493,8 @@ extension QEMUTarget {
     var hasSecureBootSupport: Bool {
         switch self.rawValue {
         case "microvm": return false
+        // boots from ROM/SD; there is no UEFI or TPM to talk to
+        case QEMUTarget_arm.brain.rawValue: return false
         default: return true
         }
     }

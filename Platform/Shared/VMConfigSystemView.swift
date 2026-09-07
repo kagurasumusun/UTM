@@ -58,6 +58,9 @@ struct VMConfigSystemView: View {
                         Text("MiB")
                     }
                 }
+                if config.target.rawValue == QEMUTarget_arm.brain.rawValue {
+                    BrainOptions(config: $config.brain)
+                }
             }
         }.alert(item: $warningMessage) { warning in
             switch warning {
@@ -203,6 +206,107 @@ private struct HardwareOptions: View {
                         target = AnyQEMUConstant(rawValue: newValue)!
                     }
                 }
+        }
+    }
+}
+
+/// Settings for qemu-brain's SHARP Brain machine.
+///
+/// Each control maps to a `-machine brain,<property>` registered by
+/// `brain_instance_init()` in qemu-brain's `hw/arm/mxs.c`.
+private struct BrainOptions: View {
+    @Binding var config: UTMQemuConfigurationBrain
+
+    private static let bootModes = ["eboot", "full"]
+
+    var body: some View {
+        Section(header: Text("SHARP Brain")) {
+            Picker("Boot Mode", selection: $config.bootMode) {
+                ForEach(Self.bootModes, id: \.self) { mode in
+                    Text(mode).tag(mode)
+                }
+            }
+            .help("'eboot' jumps straight into EBOOT. 'full' also runs the XLDR DDR init.")
+            Toggle(isOn: $config.isRomVerbose, label: {
+                Text("Verbose ROM Output")
+            })
+            .help("Log the ROM/XLDR stage to the serial console.")
+        }
+        DetailedSection("Hardware Fidelity", description: "Strict mode makes the model fail exactly like the real device. Turning it off re-enables every QEMU-only guest aid at once; individual aids below stay off unless you enable them.") {
+            Toggle(isOn: $config.isStrictHw, label: {
+                Text("Strict Hardware Mode")
+            })
+            Toggle(isOn: $config.isAidRegion4Remap, label: {
+                Text("Remap FMD Region 4")
+            })
+            .disabled(config.isStrictHw)
+            .help("Remap the FMD Region 4 window at 0xf6800 onto the real FAT32 partition.")
+            Toggle(isOn: $config.isAidSdLauncher, label: {
+                Text("SD Auto-Launch")
+            })
+            .disabled(config.isStrictHw)
+            .help("After eMMC boot, scan the SD card for a launcher and run it.")
+            Toggle(isOn: $config.isAidIgnoreBusErr, label: {
+                Text("Ignore Bus Errors")
+            })
+            .disabled(config.isStrictHw)
+            .help("Ignore unmapped or aborted memory transactions instead of raising a real abort.")
+        }
+        DetailedSection("GPMI NAND", description: "The NAND socket on the Brain is unpopulated, so an empty-socket timeout is what real hardware does.") {
+            Toggle(isOn: $config.hasGpmiNand, label: {
+                Text("Attach NAND to GPMI")
+            })
+            if config.hasGpmiNand {
+                TextField("NAND Image", text: Binding(
+                    get: { config.gpmiNandFileName ?? "" },
+                    set: { config.gpmiNandFileName = $0.isEmpty ? nil : $0 }
+                ))
+                .help("Raw image backing the GPMI NAND media.")
+            }
+        }
+        DetailedSection("Display", description: "The panel is a 480x854 portrait module mounted sideways in the clamshell, so the guest scans out 480x854 and the console rotates it to landscape.") {
+            HStack {
+                NumberTextField("", number: $config.lcdWidth, prompt: "480")
+                    .multilineTextAlignment(.trailing)
+                Text("x")
+                NumberTextField("", number: $config.lcdHeight, prompt: "854")
+                    .multilineTextAlignment(.trailing)
+            }
+            .help("Guest framebuffer size in pixels.")
+            Picker("Rotation", selection: $config.lcdRotate) {
+                ForEach([0, 90, 180, 270], id: \.self) { degrees in
+                    Text("\(degrees)\u{00B0}").tag(degrees)
+                }
+            }
+            .help("How far the glass is mounted from the scan order. 90\u{00B0} gives the landscape picture.")
+        }
+        DetailedSection("Fault Injection", description: "A verification aid for studying the Brain's flash failures: reads inside the zone are made to error, stall, or simply be traced. Does nothing while the length is zero or the mode is off.") {
+            Picker("Mode", selection: $config.expFaultMode) {
+                Text("Off").tag(0)
+                Text("Read Error").tag(1)
+                Text("Read Delay").tag(2)
+                Text("Trace Only").tag(3)
+            }
+            HStack {
+                NumberTextField("", number: $config.expFaultStart, prompt: "0")
+                    .multilineTextAlignment(.trailing)
+                Text("First Sector")
+            }
+            .help("First sector of the injected zone.")
+            HStack {
+                NumberTextField("", number: $config.expFaultLen, prompt: "0")
+                    .multilineTextAlignment(.trailing)
+                Text("Sectors")
+            }
+            .help("Length of the injected zone in sectors.")
+            if config.expFaultMode == 2 {
+                HStack {
+                    NumberTextField("", number: $config.expFaultDelayUs, prompt: "500000")
+                        .multilineTextAlignment(.trailing)
+                    Text("\u{00B5}s")
+                }
+                .help("Virtual-time delay applied to each zone read.")
+            }
         }
     }
 }

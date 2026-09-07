@@ -47,6 +47,10 @@ extension UTMQemuConfigurationSound {
     init?(forArchitecture architecture: QEMUArchitecture, target: any QEMUTarget) {
         self.init()
         let rawTarget = target.rawValue
+        // audio is the SoC's SGTL5000, wired up by the machine itself
+        if rawTarget == QEMUTarget_arm.brain.rawValue {
+            return nil
+        }
         if rawTarget.hasPrefix("pc") || rawTarget == "isapc" {
             hardware = QEMUSoundDevice_i386.sb16
         } else if rawTarget.hasPrefix("pc") || rawTarget.hasPrefix("pseries") {

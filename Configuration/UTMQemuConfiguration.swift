@@ -260,6 +260,10 @@ extension UTMQemuConfiguration {
         input = .init(forArchitecture: architecture, target: target)
         sharing = .init(forArchitecture: architecture, target: target)
         system.cpu = architecture.cpuType.default
+        if target.rawValue == QEMUTarget_arm.brain.rawValue {
+            // the i.MX28 board ships 128 MiB of DDR2; more is not addressable
+            system.memorySize = 128
+        }
         if let display = UTMQemuConfigurationDisplay(forArchitecture: architecture, target: target) {
             displays = [display]
         } else {

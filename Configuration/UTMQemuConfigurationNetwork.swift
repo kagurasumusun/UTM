@@ -164,6 +164,10 @@ extension UTMQemuConfigurationNetwork {
     init?(forArchitecture architecture: QEMUArchitecture, target: any QEMUTarget) {
         self.init()
         let rawTarget = target.rawValue
+        // the Brain has no NIC
+        if rawTarget == QEMUTarget_arm.brain.rawValue {
+            return nil
+        }
         if rawTarget.hasPrefix("pc") {
             if architecture == .i386 {
                 hardware = QEMUNetworkDevice_i386.ne2k_isa

@@ -77,7 +77,7 @@ extension UTMQemuConfigurationDisplay {
     init?(forArchitecture architecture: QEMUArchitecture, target: any QEMUTarget) {
         self.init()
         let rawTarget = target.rawValue
-        if !architecture.hasAgentSupport || rawTarget.hasPrefix("pc") || rawTarget == "isapc" {
+        if !architecture.hasAgentSupport || !target.hasAgentSupport || rawTarget.hasPrefix("pc") || rawTarget == "isapc" {
             isDynamicResolution = false
         }
         if rawTarget.hasPrefix("pc") {
